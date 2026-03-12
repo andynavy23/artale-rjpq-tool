@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RJPQ 輔助工具</title>
+    <title>Romeo and Juliet Party Quest (RJPQ) 輔助工具</title>
     <!-- 使用 PeerJS 進行 P2P 連線 -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
@@ -40,7 +40,7 @@
             border: 3px solid var(--ms-border);
             border-radius: 8px;
             width: 95%;
-            max-width: 420px;
+            max-width: 440px;
             box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.4);
             display: flex;
             flex-direction: column;
@@ -60,7 +60,7 @@
         }
 
         .header .title {
-            font-size: 16px;
+            font-size: 15px;
             text-shadow: var(--ms-wz-shadow);
         }
 
@@ -85,23 +85,50 @@
             background: var(--ms-content-bg);
             border: 2px solid #bbb;
             border-radius: 6px;
-            padding: 12px;
+            padding: 10px;
             font-size: 14px;
             box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.1);
         }
 
         .panel-label {
             font-weight: bold;
-            margin-bottom: 8px;
-            display: block;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             color: #444;
             text-shadow: 1px 1px 0 #fff;
+        }
+
+        .id-badge {
+            font-family: monospace;
+            background: #eee;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            border: 1px solid #ccc;
+        }
+
+        .participant-list {
+            margin-top: 8px;
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .participant-tag {
+            font-size: 11px;
+            background: #e8f4f8;
+            color: #336699;
+            padding: 2px 6px;
+            border-radius: 10px;
+            border: 1px solid #abd2e0;
         }
 
         .join-box {
             display: flex;
             gap: 6px;
-            margin-top: 10px;
+            margin-top: 8px;
         }
 
         input {
@@ -130,12 +157,12 @@
             align-items: center;
         }
 
-        .ms-btn:hover {
+        .ms-btn:hover:not(:disabled) {
             background: var(--ms-btn-hover-gradient);
             border-color: #775500;
         }
 
-        .ms-btn:active {
+        .ms-btn:active:not(:disabled) {
             transform: translate(1px, 1px);
             box-shadow: none;
         }
@@ -147,36 +174,50 @@
             text-shadow: 1px 1px 0px rgba(0, 0, 0, 0.5);
         }
 
-        .ms-btn.primary:hover {
+        .ms-btn.primary:hover:not(:disabled) {
             background: linear-gradient(to bottom, #88bbec 0%, #4477aa 100%);
         }
 
         .ms-btn:disabled {
-            opacity: 0.6;
+            opacity: 0.5;
             cursor: not-allowed;
-            background: #eee !important;
+            background: #f0f0f0;
+            border-color: #ccc;
+            text-shadow: none;
         }
 
         /* 系統日誌視窗 */
+        .log-section {
+            margin-top: 5px;
+        }
+        .log-header {
+            font-size: 12px;
+            font-weight: bold;
+            color: #666;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+        #btn-log-toggle { font-size: 10px; height: 18px; padding: 0 6px; }
+
         .log-panel {
             background: #111;
             color: #00ff00;
             font-family: 'Consolas', monospace;
             font-size: 11px;
-            height: 80px;
+            height: 100px;
             overflow-y: auto;
             padding: 8px;
             border: 2px solid #444;
             border-radius: 4px;
-            margin-top: 5px;
-            display: flex;
-            flex-direction: column-reverse; /* 新訊息在最下面，並保持捲動到底部 */
+            display: none;
+            flex-direction: column-reverse;
         }
         .log-entry { margin-bottom: 2px; }
-        .log-info { color: #aaa; }
         .log-warn { color: #ffcc00; }
         .log-error { color: #ff4444; }
-        .log-success { color: #00ff00; }
 
         /* 地圖區域 */
         .map-area {
@@ -214,27 +255,22 @@
         }
 
         .door {
-            height: 32px;
+            height: 38px;
             background: linear-gradient(to bottom, #ffffff 0%, #e0e0e0 100%);
             border: 2px solid #666;
             border-bottom: 4px solid #444;
             border-radius: 4px;
             cursor: pointer;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             transition: all 0.1s;
+            position: relative;
         }
 
-        .door:hover {
-            border-color: #333;
-            background: #fff;
-        }
-
-        .door:active {
-            border-bottom-width: 2px;
-            transform: translateY(2px);
-        }
+        .door:hover { border-color: #333; background: #fff; }
+        .door:active { border-bottom-width: 2px; transform: translateY(2px); }
 
         .door.state-pass {
             background: linear-gradient(to bottom, #c3e6cb 0%, #28a745 100%);
@@ -244,9 +280,25 @@
             content: "O";
             color: white;
             font-weight: bold;
-            font-size: 20px;
+            font-size: 22px;
             text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
         }
+
+        /* 標記者小標簽 */
+        .door-tag {
+            position: absolute;
+            bottom: -2px;
+            right: 0;
+            font-size: 9px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            padding: 0 3px;
+            border-radius: 2px;
+            transform: scale(0.85);
+            pointer-events: none;
+            display: none;
+        }
+        .door.state-pass .door-tag { display: block; }
 
         .door.state-error {
             background: linear-gradient(to bottom, #f5c6cb 0%, #dc3545 100%);
@@ -256,7 +308,7 @@
             content: "X";
             color: white;
             font-weight: bold;
-            font-size: 20px;
+            font-size: 22px;
             text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
         }
 
@@ -268,12 +320,13 @@
 
         .instructions {
             font-size: 11px;
-            color: #888;
+            color: #777;
             text-align: center;
-            background: #f8f8f8;
+            background: #fdfdfd;
             padding: 8px;
             border-radius: 4px;
             border: 1px solid #ddd;
+            line-height: 1.6;
         }
 
         /* Loading */
@@ -290,12 +343,9 @@
         }
 
         .spinner {
-            width: 30px;
-            height: 30px;
-            border: 4px solid #eee;
-            border-top: 4px solid var(--ms-dark-blue);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
+            width: 30px; height: 30px;
+            border: 4px solid #eee; border-top: 4px solid var(--ms-dark-blue);
+            border-radius: 50%; animation: spin 1s linear infinite;
         }
 
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -318,7 +368,11 @@
         <div class="content">
             <!-- 房間控制面板 -->
             <div class="panel">
-                <span class="panel-label">🛠️ 房間控制</span>
+                <div class="panel-label">
+                    <span>📡 房間與成員</span>
+                    <span class="id-badge" id="my-id-display">我的 ID: ----</span>
+                </div>
+                
                 <div id="init-actions" style="display: flex; gap: 8px;">
                     <button class="ms-btn primary" id="btn-host" onclick="startHost()" style="flex: 1;">建立房間</button>
                     <button class="ms-btn" id="btn-copy" onclick="copyInvite()" style="display: none;">複製連結</button>
@@ -329,9 +383,18 @@
                     <button class="ms-btn" id="btn-join" onclick="startJoin()">加入房間</button>
                 </div>
 
-                <div class="log-panel" id="log-panel">
-                    <!-- 日誌訊息 -->
-                    <div class="log-entry log-success">> 系統就緒。請建立或加入房間。</div>
+                <div class="participant-list" id="participant-list">
+                    <!-- 成員標籤 -->
+                </div>
+
+                <div class="log-section">
+                    <div class="log-header" onclick="toggleLog()">
+                        <span>系統日誌</span>
+                        <button class="ms-btn" id="btn-log-toggle">顯示</button>
+                    </div>
+                    <div class="log-panel" id="log-panel">
+                        <div class="log-entry">> 準備就緒。</div>
+                    </div>
                 </div>
             </div>
 
@@ -341,13 +404,15 @@
             </div>
 
             <div class="footer-tools">
-                <button class="ms-btn" style="flex: 1; border-color: #e57373;" onclick="resetAll()">全地圖清空</button>
-                <button class="ms-btn" onclick="location.reload()">重新整頁</button>
+                <button class="ms-btn" id="btn-reset-all" style="flex: 1; border-color: #e57373; display: none;" onclick="resetAll()">清空所有標記</button>
+                <button class="ms-btn" id="btn-reconnect" onclick="location.reload()">重置所有連線</button>
             </div>
 
             <div class="instructions">
-                🕹️ <b>左鍵</b>: 標記正確 (同步) | 🕹️ <b>右鍵</b>: 標記死路 (本地)<br>
-                <span>診斷: 若卡在「正在呼叫」，請確認雙方皆在同網域或房號正確。</span>
+                🕹️ <b>電腦</b>: 左鍵正確 (同步) / 右鍵死路 (本地)<br>
+                📱 <b>手機</b>: 點擊正確 (同步) / <b>長按</b>死路 (本地)<br>
+                ⚠️ <b>限制</b>: 僅標記者可取消自己的 O。清空標記僅房主可用。<br>
+                📢 <b>注意</b>: P2P 在公用 Wi-Fi 或嚴格防火牆下可能無法相連。
             </div>
         </div>
     </div>
@@ -355,20 +420,27 @@
     <script>
         // === 狀態變數 ===
         let peer = null;
-        let myId = null;
+        let myIdShort = ""; // 縮短版 ID 供署名
+        let fullMyId = "";
         let guestConns = [];  // 所有當前連線
         let isHost = false;
-        const mapData = Array(10).fill().map(() => Array(4).fill(0));
+        
+        // mapData[f][d] = { v: 0|1, owner: 'shortId' }
+        const mapData = Array(10).fill().map(() => Array(4).fill().map(() => ({ v: 0, owner: null })));
 
         const els = {
             load: document.getElementById('loading'),
             loadMsg: document.getElementById('load-msg'),
             log: document.getElementById('log-panel'),
+            logBtn: document.getElementById('btn-log-toggle'),
             joinInput: document.getElementById('join-id'),
             btnCopy: document.getElementById('btn-copy'),
             grid: document.getElementById('map-grid'),
             btnHost: document.getElementById('btn-host'),
-            btnJoin: document.getElementById('btn-join')
+            btnJoin: document.getElementById('btn-join'),
+            myIdBadge: document.getElementById('my-id-display'),
+            pList: document.getElementById('participant-list'),
+            btnReset: document.getElementById('btn-reset-all')
         };
 
         // === 工具函式 ===
@@ -377,7 +449,12 @@
             entry.className = `log-entry log-${type}`;
             entry.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
             els.log.prepend(entry);
-            console.log(`[${type}] ${msg}`);
+        };
+
+        const toggleLog = () => {
+            const isHidden = els.log.style.display !== 'flex';
+            els.log.style.display = isHidden ? 'flex' : 'none';
+            els.logBtn.innerText = isHidden ? '隱藏' : '顯示';
         };
 
         const setLoading = (show, msg = "處理中...") => {
@@ -389,11 +466,11 @@
         function initPeer(onReady) {
             if (peer) return onReady();
             
-            log("初始化伺服器連線...", "info");
-            setLoading(true, "聯繫 P2P 中繼伺服器...");
+            log("通訊啟動中...", "info");
+            setLoading(true, "連線中...");
             
             peer = new Peer({
-                debug: 2,
+                debug: 1,
                 config: {
                     'iceServers': [
                         { urls: 'stun:stun.l.google.com:19302' },
@@ -403,124 +480,109 @@
             });
 
             peer.on('open', (id) => {
-                myId = id;
-                log(`已建立 P2P 通訊！分配 ID: ${id}`, "success");
+                fullMyId = id;
+                myIdShort = id.substring(0, 4);
+                els.myIdBadge.innerText = `我的 ID: ${myIdShort}`;
+                log(`網關就緒。我的 ID: ${id}`, "success");
                 setLoading(false);
+                refreshParticipantList();
                 onReady();
             });
 
             peer.on('connection', (conn) => {
-                log(`偵測到新連線: ${conn.peer}`, "info");
+                log(`收到加入請求: ${conn.peer.substring(0,4)}...`, "info");
                 setupConnection(conn);
             });
 
             peer.on('error', (err) => {
                 setLoading(false);
-                log(`通訊錯誤 (${err.type}): ${err.message}`, "error");
-                
-                if (err.type === 'peer-unavailable') {
-                    alert("找不到房號。請確認房主是否還在線，或房號輸入正確。");
-                }
+                log(`連線異常: ${err.type}`, "error");
+                if (err.type === 'peer-unavailable') alert("找不到房號，請確認房號正確且房主在線。");
             });
 
             peer.on('disconnected', () => {
-                log("與中繼伺服器斷線，正在嘗試重新建立背景連結...", "warn");
+                log("中斷，重新嘗試中...", "warn");
                 peer.reconnect();
             });
         }
 
-        // 房主流程
         function startHost() {
             initPeer(() => {
                 isHost = true;
                 els.btnCopy.style.display = "inline-flex";
+                els.btnReset.style.display = "inline-flex";
                 els.btnHost.disabled = true;
                 els.btnJoin.disabled = true;
-                log("已建立房間。您現在是『房主』。", "success");
-                window.location.hash = myId;
+                log("成為房主。", "success");
+                window.location.hash = fullMyId;
             });
         }
 
-        // 訪客流程
         function startJoin() {
             const targetId = els.joinInput.value.trim();
-            if (!targetId) return alert("請貼上正確的房號 (ID)");
+            if (!targetId) return alert("請輸入房號");
 
             initPeer(() => {
-                log(`嘗試向房間 [${targetId}] 發起連線協商...`, "info");
-                setLoading(true, "建立 P2P 隧道中...");
+                log(`嘗試連接 ${targetId.substring(0,4)}...`, "info");
+                setLoading(true, "握手中...");
                 isHost = false;
                 
-                const conn = peer.connect(targetId, {
-                    reliable: true,
-                    serialization: 'json'
-                });
+                const conn = peer.connect(targetId, { reliable: true });
                 
                 conn.on('open', () => {
                     setLoading(false);
-                    log("連線建立成功！已導通資料通道。", "success");
+                    log("連線成功！", "success");
                     els.joinInput.value = "";
                     els.btnHost.disabled = true;
                     els.btnJoin.disabled = true;
-                    window.location.hash = targetId;
+                    // 加入成功後清除網址 Hash
+                    history.replaceState(null, document.title, window.location.pathname);
                     setupConnection(conn);
                 });
 
-                // 超時偵測
                 setTimeout(() => {
                     if (els.load.style.display === 'flex') {
                         setLoading(false);
-                        log("連線超時！請檢查網路，或是雙方是否都有透過複製連結進入地屬...", "error");
-                        log("建議: 房主與訪客皆重新整頁後再次嘗試。", "warn");
+                        log("連線超時，請檢查房號或雙方網路環境。", "error");
                     }
                 }, 10000);
             });
         }
 
         function setupConnection(conn) {
-            // 記錄連線
             if (!guestConns.find(c => c.peer === conn.peer)) {
                 guestConns.push(conn);
             }
 
             conn.on('open', () => {
-                log(`資料通道啟動 [對象: ${conn.peer}]`, "success");
+                refreshParticipantList();
                 if (isHost) {
-                    log("同步目前地圖狀態給新加入的隊友...", "info");
                     conn.send({ type: 'INIT', data: mapData });
                 }
             });
 
             conn.on('data', (payload) => {
-                handleMessage(payload, conn);
+                if (payload.type === 'INIT') {
+                    for(let f=0; f<10; f++) for(let d=0; d<4; d++) {
+                        mapData[f][d] = payload.data[f][d];
+                        updateDoorUI(f, d);
+                    }
+                } else if (payload.type === 'SYNC') {
+                    mapData[payload.f][payload.d] = { v: payload.v, owner: payload.owner };
+                    updateDoorUI(payload.f, payload.d);
+                    if (isHost) broadcast(payload, conn); 
+                } else if (payload.type === 'RESET') {
+                    clearLocal();
+                    if (isHost) broadcast(payload, conn);
+                }
             });
 
             conn.on('close', () => {
-                log(`隊友斷開連線: ${conn.peer}`, "warn");
+                log(`隊友斷線: ${conn.peer.substring(0,4)}`, "warn");
                 guestConns = guestConns.filter(c => c !== conn);
+                refreshParticipantList();
+                if (!isHost && guestConns.length === 0) log("房主已離開。", "error");
             });
-            
-            conn.on('error', (err) => {
-                log(`通道內發生錯誤: ${err}`, "error");
-            });
-        }
-
-        function handleMessage(msg, sender) {
-            if (msg.type === 'INIT') {
-                log("接收房主初始化地圖資訊...", "info");
-                for(let f=0; f<10; f++) for(let d=0; d<4; d++) {
-                    mapData[f][d] = msg.data[f][d];
-                    updateDoorUI(f, d);
-                }
-            } else if (msg.type === 'SYNC') {
-                mapData[msg.f][msg.d] = msg.v;
-                updateDoorUI(msg.f, msg.d);
-                if (isHost) broadcast(msg, sender); // 房主負責轉發給其他所有房客
-            } else if (msg.type === 'RESET') {
-                log("接收清空指令，正在重設地圖...", "info");
-                clearLocal();
-                if (isHost) broadcast(msg, sender);
-            }
         }
 
         function broadcast(msg, exclude = null) {
@@ -529,24 +591,36 @@
             });
         }
 
-        function copyInvite() {
-            const url = window.location.origin + window.location.pathname + "#" + myId;
-            navigator.clipboard.writeText(url).then(() => {
-                log("已將包含房號的邀請連結複製到剪貼簿。", "success");
-                alert("已複製專屬連結！傳送給隊友後，他們點開並按『加入』即可連線。");
+        function refreshParticipantList() {
+            els.pList.innerHTML = "";
+            const ids = [myIdShort];
+            guestConns.forEach(c => { if(c.open) ids.push(c.peer.substring(0, 4)); });
+            
+            ids.forEach(id => {
+                const tag = document.createElement("span");
+                tag.className = "participant-tag";
+                tag.innerText = `👤 ${id}`;
+                els.pList.appendChild(tag);
             });
         }
 
-        // === 地圖邏輯 ===
+        function copyInvite() {
+            const url = window.location.origin + window.location.pathname + "#" + fullMyId;
+            navigator.clipboard.writeText(url).then(() => {
+                log("邀請連結已複製。", "success");
+                alert("連結已複製，傳給隊友後，他們點開並按「加入房間」即可。");
+            });
+        }
+
+        // === 地圖與點擊邏輯 ===
         function renderGrid() {
             els.grid.innerHTML = "";
             for (let f = 0; f < 10; f++) {
                 const floor = document.createElement("div");
                 floor.className = "floor";
-                
                 const label = document.createElement("div");
                 label.className = "f-label";
-                label.innerText = `F${f+1}`;
+                label.innerText = `L${10-f}`;
                 floor.appendChild(label);
 
                 const doors = document.createElement("div");
@@ -555,15 +629,25 @@
                     const door = document.createElement("div");
                     door.className = "door";
                     door.id = `d-${f}-${d}`;
+                    const tag = document.createElement("div");
+                    tag.className = "door-tag";
+                    door.appendChild(tag);
                     
-                    door.onclick = (e) => {
-                        e.preventDefault();
-                        onDoorClick(f, d);
-                    };
-                    door.oncontextmenu = (e) => {
-                        e.preventDefault();
-                        onDoorRightClick(f, d);
-                    };
+                    // --- 點擊事件處理 ---
+                    let pressTimer;
+                    const startPress = () => { pressTimer = setTimeout(() => onDoorRightClick(f, d), 500); };
+                    const cancelPress = () => { clearTimeout(pressTimer); };
+
+                    door.onmousedown = (e) => { if(e.button === 0) startPress(); };
+                    door.onmouseup = cancelPress;
+                    door.onmouseleave = cancelPress;
+                    
+                    door.ontouchstart = (e) => { startPress(); };
+                    door.ontouchend = cancelPress;
+
+                    door.onclick = (e) => { e.preventDefault(); onDoorClick(f, d); };
+                    door.oncontextmenu = (e) => { e.preventDefault(); onDoorRightClick(f, d); };
+                    
                     doors.appendChild(door);
                 }
                 floor.appendChild(doors);
@@ -572,15 +656,25 @@
         }
 
         function onDoorClick(f, d) {
-            const nextVal = mapData[f][d] === 1 ? 0 : 1;
-            mapData[f][d] = nextVal;
-            updateDoorUI(f, d);
+            const item = mapData[f][d];
             
-            const msg = { type: 'SYNC', f, d, v: nextVal };
-            if (isHost) broadcast(msg);
-            else if (guestConns.length > 0 && guestConns[0].open) {
-                guestConns[0].send(msg);
+            // 如果這是一個 O 標記，檢查權限
+            if (item.v === 1) {
+                if (item.owner !== myIdShort && !isHost) {
+                    log("權限不足: 僅標記者可移除此 O。", "warn");
+                    return;
+                }
+                item.v = 0;
+                item.owner = null;
+            } else {
+                item.v = 1;
+                item.owner = myIdShort;
             }
+
+            updateDoorUI(f, d);
+            const msg = { type: 'SYNC', f, d, v: item.v, owner: item.owner };
+            if (isHost) broadcast(msg);
+            else if (guestConns.length > 0 && guestConns[0].open) guestConns[0].send(msg);
         }
 
         function onDoorRightClick(f, d) {
@@ -596,38 +690,40 @@
 
         function updateDoorUI(f, d) {
             const el = document.getElementById(`d-${f}-${d}`);
-            if (mapData[f][d] === 1) {
+            const tag = el.querySelector('.door-tag');
+            const item = mapData[f][d];
+            
+            if (item.v === 1) {
                 el.classList.add('state-pass');
                 el.classList.remove('state-error');
+                tag.innerText = item.owner;
             } else {
                 el.classList.remove('state-pass');
+                tag.innerText = "";
             }
         }
 
         function resetAll() {
-            if (!confirm("確定要重設所有標記嗎？")) return;
+            if (!isHost) return;
+            if (!confirm("確定要清空全場標記？")) return;
             clearLocal();
-            const msg = { type: 'RESET' };
-            if (isHost) broadcast(msg);
-            else if (guestConns.length > 0 && guestConns[0].open) {
-                guestConns[0].send(msg);
-            }
+            broadcast({ type: 'RESET' });
         }
 
         function clearLocal() {
             for(let f=0; f<10; f++) for(let d=0; d<4; d++) {
-                mapData[f][d] = 0;
+                mapData[f][d] = { v: 0, owner: null };
                 const el = document.getElementById(`d-${f}-${d}`);
                 el.classList.remove('state-pass', 'state-error');
             }
         }
 
-        // === 啟動程序 ===
+        // === 啟動 ===
         renderGrid();
         const initialHash = window.location.hash.substring(1);
         if (initialHash) {
             els.joinInput.value = initialHash;
-            log("偵測到 URL 帶有預設房號，請點擊『加入房間』發起連線。", "warn");
+            log("網址包含房號，請點擊『加入房間』。", "warn");
         }
     </script>
 </body>
