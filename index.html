@@ -105,11 +105,21 @@
             margin-bottom: 10px;
             padding-bottom: 10px;
             border-bottom: 1px dashed #ccc;
+            flex-wrap: wrap;
+            align-items: center;
         }
 
         .nickname-box input {
             font-weight: bold;
             color: var(--ms-dark-blue);
+            flex: 1;
+            min-width: 100px;
+        }
+
+        .action-group {
+            display: flex;
+            gap: 6px;
+            margin-left: auto;
         }
 
         .participant-list {
@@ -145,7 +155,6 @@
         }
 
         input {
-            flex: 1;
             padding: 8px 10px;
             border: 2px solid #ccc;
             border-radius: 4px;
@@ -167,6 +176,7 @@
             display: inline-flex;
             justify-content: center;
             align-items: center;
+            white-space: nowrap;
         }
 
         .ms-btn:hover:not(:disabled) {
@@ -184,10 +194,6 @@
             color: white;
             border-color: #224466;
             text-shadow: 1px 1px 0px rgba(0, 0, 0, 0.5);
-        }
-
-        .ms-btn.primary:hover:not(:disabled) {
-            background: linear-gradient(to bottom, #88bbec 0%, #4477aa 100%);
         }
 
         .ms-btn:disabled {
@@ -422,25 +428,32 @@
             <div class="panel">
                 <div class="nickname-box" id="nick-box">
                     <input type="text" id="nick-input" maxlength="10" placeholder="輸入暱稱 (中英數)...">
-                    <button class="ms-btn" onclick="saveNick()" id="btn-save-nick">確定暱稱</button>
-                    <button class="ms-btn" onclick="editNick()" id="btn-edit-nick" style="display: none;">修改</button>
-                    <button class="ms-btn" onclick="leaveRoom()" id="btn-leave" style="display: none; background: #ffcccc; margin-left: auto;">離開房間</button>
+                    <div class="action-group">
+                        <button class="ms-btn" onclick="saveNick()" id="btn-save-nick">確定暱稱</button>
+                        <button class="ms-btn" onclick="editNick()" id="btn-edit-nick" style="display: none;">修改</button>
+                        <button class="ms-btn" onclick="copyInvite()" id="btn-copy" style="display: none;">複製連結</button>
+                        <button class="ms-btn" onclick="leaveRoom()" id="btn-leave" style="display: none; background: #ffcccc;">離開</button>
+                    </div>
+                </div>
+
+                <div id="conn-panel">
+                    <div class="panel-label">
+                        <span>📡 房間控制</span>
+                    </div>
+
+                    <div id="init-actions" style="display: none; gap: 8px;">
+                        <button class="ms-btn primary" id="btn-host" onclick="startHost()" style="flex: 1;">建立房間</button>
+                    </div>
+
+                    <div class="join-box" id="join-row" style="display: none;">
+                        <input type="text" id="join-id" placeholder="貼上房號 (ID)...">
+                        <button class="ms-btn" id="btn-join" onclick="startJoin()">加入房間</button>
+                    </div>
                 </div>
 
                 <div class="panel-label">
-                    <span>📡 房間成員</span>
+                    <span>👥 房間成員</span>
                 </div>
-
-                <div id="init-actions" style="display: none; gap: 8px;">
-                    <button class="ms-btn primary" id="btn-host" onclick="startHost()" style="flex: 1;">建立房間</button>
-                    <button class="ms-btn" id="btn-copy" onclick="copyInvite()" style="display: none;">複製連結</button>
-                </div>
-
-                <div class="join-box" id="join-row" style="display: none;">
-                    <input type="text" id="join-id" placeholder="貼上房號 (ID)...">
-                    <button class="ms-btn" id="btn-join" onclick="startJoin()">加入房間</button>
-                </div>
-
                 <div class="participant-list" id="participant-list">
                     <!-- 成員標籤 -->
                 </div>
@@ -463,14 +476,13 @@
             <div class="footer-tools">
                 <button class="ms-btn" id="btn-reset-all" style="flex: 1; border-color: #e57373; display: none;"
                     onclick="resetAll()">清空所有標記</button>
-                <button class="ms-btn" id="btn-reconnect" onclick="location.reload()">重新連線</button>
+                <button class="ms-btn" id="btn-reconnect" onclick="reconnectCleanly()">重新連線</button>
             </div>
 
             <div class="instructions">
-                🕹️ <b>電腦</b>: 左鍵正確 (同步) / 雙擊正確 (取消) / 右鍵死路 (本地)<br>
-                📱 <b>手機</b>: 點擊正確 (同步) / <b>雙擊</b>死路 (本地)<br>
-                ⚠️ <b>規則</b>: 每人在每層限標一格。其他人不能重複標記已佔用位置。<br>
-                📢 <b>注意</b>: P2P 在公用 Wi-Fi 或嚴格防火牆下可能無法相連。
+                🕹️ <b>電腦</b>: 點擊正確 / 右鍵死路 (本地)<br>
+                📱 <b>手機</b>: 點擊正確 / <b>雙擊</b>死路 (本地)<br>
+                ⚠️ <b>規則</b>: 每人在每層限標一格。
             </div>
         </div>
     </div>
@@ -501,7 +513,8 @@
             btnEditNick: document.getElementById('btn-edit-nick'),
             btnLeave: document.getElementById('btn-leave'),
             initActions: document.getElementById('init-actions'),
-            joinRow: document.getElementById('join-row')
+            joinRow: document.getElementById('join-row'),
+            connPanel: document.getElementById('conn-panel')
         };
 
         // === 工具函式 ===
@@ -539,7 +552,7 @@
                 val = "冒險者" + Math.floor(1000 + Math.random() * 9000);
             }
             if (!/^[a-zA-Z0-9\u4e00-\u9fa5]{1,10}$/.test(val)) {
-                return alert("暱稱請使用 1-10 位英數或中文字，且不可含符號。");
+                return alert("暱稱請使用 1-10 位英數或中文字。");
             }
 
             myNick = val;
@@ -555,7 +568,7 @@
         }
 
         function editNick() {
-            if (!confirm("修改暱稱將中斷目前連線，確定嗎？")) return;
+            if (!confirm("修改暱稱將斷開目前連線，確定嗎？")) return;
             leaveRoom();
             els.nickInput.disabled = false;
             els.nickInput.style.backgroundColor = "#fff";
@@ -575,13 +588,20 @@
             
             els.initActions.style.display = "flex";
             els.joinRow.style.display = "flex";
+            els.connPanel.style.display = "block";
             els.btnLeave.style.display = "none";
+            els.btnCopy.style.display = "none";
             els.btnHost.disabled = false;
             els.btnJoin.disabled = false;
-            els.btnCopy.style.display = "none";
             els.btnReset.style.display = "none";
             els.pList.innerHTML = "";
-            log("連線已斷開。", "warn");
+            log("連線已中斷。", "warn");
+        }
+
+        function reconnectCleanly() {
+            window.location.hash = "";
+            history.replaceState("", document.title, window.location.pathname);
+            location.reload();
         }
 
         // === PeerJS 核心邏輯 ===
@@ -592,7 +612,7 @@
             peer = new Peer({
                 debug: 1,
                 config: {
-                    'iceServers': [
+                    iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
                         { urls: 'stun:stun1.l.google.com:19302' }
                     ]
@@ -621,10 +641,9 @@
             initPeer(() => {
                 isHost = true;
                 els.btnCopy.style.display = "inline-flex";
-                els.btnReset.style.display = "inline-flex";
                 els.btnLeave.style.display = "inline-flex";
-                els.initActions.style.display = "none";
-                els.joinRow.style.display = "none";
+                els.connPanel.style.display = "none";
+                els.btnReset.style.display = "inline-flex";
                 window.location.hash = fullMyId;
                 log("已建立房間。您現在是房主。", "success");
                 refreshParticipantList();
@@ -639,7 +658,7 @@
                 const conn = peer.connect(targetId, { reliable: true });
                 setupConnection(conn);
                 conn.on('open', () => {
-                    log(`已連接房主 ${targetId.substring(0,4)}，申請加入...`, "info");
+                    log(`已連接房主，申請加入...`, "info");
                     conn.send({ type: 'JOIN', nick: myNick });
                 });
                 setTimeout(() => {
@@ -678,7 +697,6 @@
                 if (!isHost) return;
                 const isDup = Object.values(connections).some(v => v.nick === data.nick) || myNick === data.nick;
                 if (isDup) {
-                    log(`拒絕加入: 暱稱「${data.nick}」衝突。`, "warn");
                     conn.send({ type: 'REJECT', reason: `暱稱「${data.nick}」已有人使用。` });
                     setTimeout(() => conn.close(), 500);
                     return;
@@ -696,10 +714,9 @@
                 connections[conn.peer] = { conn, nick: "房主" };
                 mapData = JSON.parse(JSON.stringify(data.state));
                 for (let f = 0; f < 10; f++) for (let d = 0; d < 4; d++) updateDoorUI(f, d);
-                log(`加入房間成功！同步地圖完成。`, "success");
+                log(`進入房間成功！`, "success");
                 els.btnLeave.style.display = "inline-flex";
-                els.initActions.style.display = "none";
-                els.joinRow.style.display = "none";
+                els.connPanel.style.display = "none";
                 els.joinInput.value = "";
                 history.replaceState(null, document.title, window.location.pathname);
                 updateParticipantListFromWelcome(data.users);
@@ -712,8 +729,6 @@
             } else if (data.type === 'SYNC') {
                 mapData[data.f][data.d].v = data.v;
                 mapData[data.f][data.d].owner = data.owner;
-                // 注意：現在規則允許每層多個標記，但一個位置只能有一人。
-                // 如果是綠色標記，其他人同層其他格不應該自動清空，除非是同一個人。
                 if (data.v === 1) {
                     for (let d = 0; d < 4; d++) {
                         if (d !== data.d && mapData[data.f][d].owner === data.owner) {
@@ -779,7 +794,7 @@
         function copyInvite() {
             const url = window.location.origin + window.location.pathname + "#" + fullMyId;
             navigator.clipboard.writeText(url).then(() => {
-                alert("房主連結已複製！傳送後請隊友按加入。");
+                alert("連結已複製！");
             });
         }
 
@@ -803,23 +818,17 @@
                     tag.className = "door-tag";
                     door.appendChild(tag);
 
-                    let lastTap = 0;
-                    door.addEventListener('touchend', (e) => {
+                    let lastTouchTime = 0;
+                    door.addEventListener('touchstart', (e) => {
                         const now = Date.now();
-                        if (now - lastTap < 300) {
+                        if (now - lastTouchTime < 350) {
+                            e.preventDefault();
                             onDoorRightClick(f, d);
                         }
-                        lastTap = now;
-                    });
+                        lastTouchTime = now;
+                    }, { passive: false });
 
                     door.onclick = (e) => {
-                        const now = Date.now();
-                        // 電腦端雙擊處理
-                        if (e.detail === 2) {
-                            if (window.matchMedia("(pointer: coarse)").matches) return;
-                            onDoorClick(f, d); // 這裡是為了取消
-                            return;
-                        }
                         onDoorClick(f, d);
                     };
                     door.oncontextmenu = (e) => {
@@ -836,9 +845,7 @@
         function onDoorClick(f, d) {
             if (!myNick) return alert("請先設定暱稱。");
             const item = mapData[f][d];
-            
             if (item.v === 1) {
-                // 如果是自己的標記，可以取消
                 if (item.owner === myNick || isHost) {
                     item.v = 0;
                     item.owner = null;
@@ -847,12 +854,10 @@
                     return;
                 }
             } else {
-                // 如果該格已經有別人的標記，不准標記
                 if (item.owner && item.owner !== myNick) {
                     log(`該格已被 ${item.owner} 標記。`, "warn");
                     return;
                 }
-                // 每層樓一人限一格，先清空自己在這層的其他標記
                 for (let i = 0; i < 4; i++) {
                     if (mapData[f][i].owner === myNick) {
                         const oldMsg = { type: 'SYNC', f, d: i, v: 0, owner: null };
@@ -892,7 +897,6 @@
             if (!el) return;
             const tag = el.querySelector('.door-tag');
             const item = mapData[f][d];
-            
             if (item.v === 1) {
                 const color = getNickColor(item.owner);
                 el.classList.add('state-pass');
