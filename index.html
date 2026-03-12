@@ -420,7 +420,7 @@
         <div class="content">
             <div class="panel">
                 <div class="nickname-box">
-                    <input type="text" id="nick-input" maxlength="10" placeholder="輸入暱稱 (英數)...">
+                    <input type="text" id="nick-input" maxlength="10" placeholder="輸入暱稱 (中英數)...">
                     <button class="ms-btn" onclick="saveNick()" id="btn-save-nick">確定暱稱</button>
                 </div>
 
@@ -448,7 +448,7 @@
                         <button class="ms-btn" id="btn-log-toggle">顯示</button>
                     </div>
                     <div class="log-panel" id="log-panel">
-                        <div class="log-entry">> 由於安全限制，請先設定您的暱稱。</div>
+                        <div class="log-entry">> 請先設定您的暱稱後開始。</div>
                     </div>
                 </div>
             </div>
@@ -480,6 +480,7 @@
         let fullMyId = "";
         let connections = {}; // { peerId: { conn, nick } }
         let mapData = Array(10).fill().map(() => Array(4).fill().map(() => ({ v: 0, owner: null })));
+        let lastLongPressTime = 0;
 
         const els = {
             load: document.getElementById('loading'),
@@ -499,9 +500,6 @@
             joinRow: document.getElementById('join-row')
         };
 
-        // === 互動鎖定 ===
-        let isLongPressing = false;
-
         // === 工具函式 ===
         const log = (msg, type = "info") => {
             const entry = document.createElement("div");
@@ -516,7 +514,7 @@
             els.logBtn.innerText = isHidden ? '隱藏' : '顯示';
         };
 
-        const setLoading = (show, msg = "處理中...") => {
+        const setLoading = (show, msg = "處理稱...") => {
             els.load.style.display = show ? 'flex' : 'none';
             els.loadMsg.innerText = msg;
         };
@@ -524,8 +522,9 @@
         // === 暱稱與控制項 ===
         function saveNick() {
             const val = els.nickInput.value.trim();
+            // 暱稱：僅限中英數，不含特殊符號
             if (!/^[a-zA-Z0-9\u4e00-\u9fa5]{1,10}$/.test(val)) {
-                return alert("暱稱請使用 1-10 位英數或中文字。");
+                return alert("暱稱請使用 1-10 位英數或中文字，且不可含符號。");
             }
             myNick = val;
             els.nickInput.disabled = true;
@@ -533,15 +532,15 @@
             els.nickInput.style.backgroundColor = "#eee";
             els.initActions.style.display = "flex";
             els.joinRow.style.display = "flex";
-            log(`已設定暱稱為: ${myNick}`, "success");
+            log(`暱稱已設定為: ${myNick}`, "success");
             refreshParticipantList();
         }
 
         // === PeerJS 核心邏輯 ===
         function initPeer(onReady) {
             if (peer) return onReady();
-            setLoading(true, "建立連線...");
-
+            setLoading(true, "建立 P2P 網關...");
+            
             peer = new Peer({
                 debug: 1,
                 config: {
@@ -554,7 +553,7 @@
 
             peer.on('open', (id) => {
                 fullMyId = id;
-                log(`伺服器導通。ID: ${id.substring(0, 4)}`, "success");
+                log(`網關就緒。房號: ${id.substring(0, 4)}`, "success");
                 setLoading(false);
                 onReady();
             });
@@ -565,8 +564,8 @@
 
             peer.on('error', (err) => {
                 setLoading(false);
-                log(`連線失敗: ${err.type}`, "error");
-                if (err.type === 'peer-unavailable') alert("房號無效或房主已離線。");
+                log(`網關錯誤: ${err.type}`, "error");
+                if (err.type === 'peer-unavailable') alert("找不到房號，請確認房號正確。");
             });
         }
 
@@ -585,21 +584,25 @@
 
         function startJoin() {
             const targetId = els.joinInput.value.trim();
-            if (!targetId) return alert("請輸入房號");
+            if (!targetId) return alert("請貼上房號");
             initPeer(() => {
-                setLoading(true, "加入中...");
+                setLoading(true, "正式接入中...");
                 const conn = peer.connect(targetId, { reliable: true });
+                
+                // ！！！關鍵：在發送 JOIN 之前先註冊好接收器
+                setupConnection(conn);
+
                 conn.on('open', () => {
-                    log("已和房主接觸...", "info");
-                    // 傳送 JOIN 訊息
+                    log(`已連接房主 ${targetId.substring(0,4)}，申請加入...`, "info");
                     conn.send({ type: 'JOIN', nick: myNick });
                 });
-
+                
                 // 設定超時
                 setTimeout(() => {
-                    if (!connections[targetId]) {
+                    // 如果還是 Loading 且沒有建立 nickname 關聯（WELCOME 沒回來）
+                    if (els.load.style.display === 'flex' && !Object.values(connections).length) {
                         setLoading(false);
-                        log("連線超時，請檢查房號是否正確。", "error");
+                        log("連線申請超時。", "error");
                     }
                 }, 10000);
             });
@@ -622,44 +625,45 @@
                     }
                 }
             });
-
+            
             conn.on('error', (err) => {
-                log(`通道出錯: ${err}`, "error");
+                log(`通道衝突: ${err}`, "error");
             });
         }
 
         function handleP2PMessage(conn, data) {
             if (data.type === 'JOIN') {
-                if (!isHost) return; // 只有房主能處理 JOIN
-                // 檢查暱稱重複
+                if (!isHost) return;
+                // 檢查暱稱衝突
                 const isDup = Object.values(connections).some(v => v.nick === data.nick) || myNick === data.nick;
                 if (isDup) {
-                    conn.send({ type: 'REJECT', reason: '此暱稱已有人使用。' });
+                    log(`拒絕加入: 暱稱「${data.nick}」衝突。`, "warn");
+                    conn.send({ type: 'REJECT', reason: `暱稱「${data.nick}」已有人使用。` });
                     setTimeout(() => conn.close(), 500);
                     return;
                 }
-
+                
                 connections[conn.peer] = { conn, nick: data.nick };
-                log(`新成員加入: ${data.nick}`, "success");
-
-                // 廣播完整的成員清單給所有人
+                log(`歡迎成員: ${data.nick}`, "success");
+                
                 const fullList = getFullNickList();
                 broadcast({ type: 'NICK_LIST', users: fullList });
-
-                // 給新成員初始化地圖與清單
                 conn.send({ type: 'WELCOME', state: mapData, users: fullList });
                 refreshParticipantList();
             } else if (data.type === 'WELCOME') {
                 setLoading(false);
                 isHost = false;
                 connections[conn.peer] = { conn, nick: "房主" };
-
+                
                 mapData = data.state;
                 for (let f = 0; f < 10; f++) for (let d = 0; d < 4; d++) updateDoorUI(f, d);
-
-                log(`成功加入房間！`, "success");
+                
+                log(`加入房間成功！同步地圖完成。`, "success");
                 els.btnHost.disabled = true;
                 els.btnJoin.disabled = true;
+                els.joinInput.value = ""; // 清空輸入框
+                
+                // 成功後才清除 hash
                 history.replaceState(null, document.title, window.location.pathname);
                 updateParticipantListFromWelcome(data.users);
             } else if (data.type === 'NICK_LIST') {
@@ -670,7 +674,6 @@
                 conn.close();
             } else if (data.type === 'SYNC') {
                 mapData[data.f][data.d] = { v: data.v, owner: data.owner };
-                // 如果是綠色標記，確保同層其他清空
                 if (data.v === 1) {
                     for (let d = 0; d < 4; d++) {
                         if (d !== data.d) {
@@ -697,9 +700,7 @@
             });
         }
 
-        // === UI 更新 ===
         function refreshParticipantList() {
-            els.pList.innerHTML = "";
             const tags = [{ nick: myNick, isHost }];
             Object.values(connections).forEach(c => {
                 if (c.conn && c.conn.open) tags.push({ nick: c.nick, isHost: false });
@@ -708,17 +709,7 @@
         }
 
         function updateParticipantListFromWelcome(users) {
-            // users: [{nick, isHost}, ...]
-            els.pList.innerHTML = "";
             renderNameTags(users);
-        }
-
-        // 定期或被動向房主同步獲取正確清單的替代方案
-        function refreshParticipantListByHostUpdate() {
-            // 在星狀拓撲中，房主會廣播 USER_JOIN，所有人 UI 也要看到
-            // 由於訪客沒有所有人的直連 conn，這裡我們會顯示房主廣播過來的暱稱
-            // 為了簡單，房主可以在每次有人進出時重新廣播完整的 NICK_LIST
-            // 我這裡先簡單處理，房主在 setupConnection 的 close 裡會處理。
         }
 
         function renderNameTags(tags) {
@@ -743,7 +734,7 @@
         function copyInvite() {
             const url = window.location.origin + window.location.pathname + "#" + fullMyId;
             navigator.clipboard.writeText(url).then(() => {
-                alert("連結已複製！");
+                alert("房主連結已複製！傳送後請隊友按加入。");
             });
         }
 
@@ -770,11 +761,9 @@
 
                     let pressTimer;
                     const startPress = () => {
-                        isLongPressing = false;
                         pressTimer = setTimeout(() => {
-                            isLongPressing = true;
                             onDoorRightClick(f, d);
-                        }, 600);
+                        }, 500);
                     };
                     const cancelPress = () => { clearTimeout(pressTimer); };
 
@@ -785,17 +774,15 @@
 
                     door.onclick = (e) => {
                         e.preventDefault();
-                        if (isLongPressing) {
-                            isLongPressing = false;
-                            return;
-                        }
+                        // 判定是否剛發生過長按 (避免手機放開觸發點擊)
+                        if (Date.now() - lastLongPressTime < 150) return;
                         onDoorClick(f, d);
                     };
                     door.oncontextmenu = (e) => {
                         e.preventDefault();
                         onDoorRightClick(f, d);
                     };
-
+                    
                     doors.appendChild(door);
                 }
                 floor.appendChild(doors);
@@ -806,17 +793,15 @@
         function onDoorClick(f, d) {
             if (!myNick) return alert("請先設定暱稱。");
             const item = mapData[f][d];
-
+            
             if (item.v === 1) {
                 if (item.owner !== myNick && !isHost) {
-                    log("無法取消他人的標記。", "warn");
+                    log("權限警告: 只有該標記者可撤銷 O。", "warn");
                     return;
                 }
                 item.v = 0;
                 item.owner = null;
             } else {
-                // 每層樓一人只能標一格 -> 這邊實作「每層樓全場只能一格」
-                // 先把同層全部清空
                 for (let i = 0; i < 4; i++) {
                     if (mapData[f][i].v === 1) {
                         const oldMsg = { type: 'SYNC', f, d: i, v: 0, owner: null };
@@ -842,6 +827,7 @@
         }
 
         function onDoorRightClick(f, d) {
+            lastLongPressTime = Date.now(); // 記錄長按發生時間
             const el = document.getElementById(`d-${f}-${d}`);
             if (el.classList.contains('state-error')) {
                 el.classList.remove('state-error');
@@ -855,7 +841,7 @@
             const el = document.getElementById(`d-${f}-${d}`);
             const tag = el.querySelector('.door-tag');
             const item = mapData[f][d];
-
+            
             if (item.v === 1) {
                 el.classList.add('state-pass');
                 el.classList.remove('state-error');
@@ -886,7 +872,7 @@
         const initialHash = window.location.hash.substring(1);
         if (initialHash) {
             els.joinInput.value = initialHash;
-            log("網址帶有房號。請輸入暱稱後按加入。", "warn");
+            log("網址檢測到房號，請設定暱稱後加入。", "warn");
         }
     </script>
 </body>
