@@ -32,6 +32,7 @@
             margin: 0;
             user-select: none;
             -webkit-user-select: none;
+            touch-action: manipulation;
         }
 
         .container {
@@ -304,8 +305,8 @@
         }
 
         .door.state-pass {
-            background: linear-gradient(to bottom, #c3e6cb 0%, #28a745 100%);
-            border-color: #1e7e34;
+            background: var(--marker-color, #28a745);
+            border-color: rgba(0, 0, 0, 0.2);
         }
 
         .door.state-pass::after {
@@ -419,10 +420,11 @@
 
         <div class="content">
             <div class="panel">
-                <div class="nickname-box">
+                <div class="nickname-box" id="nick-box">
                     <input type="text" id="nick-input" maxlength="10" placeholder="輸入暱稱 (中英數)...">
                     <button class="ms-btn" onclick="saveNick()" id="btn-save-nick">確定暱稱</button>
                     <button class="ms-btn" onclick="editNick()" id="btn-edit-nick" style="display: none;">修改</button>
+                    <button class="ms-btn" onclick="leaveRoom()" id="btn-leave" style="display: none; background: #ffcccc; margin-left: auto;">離開房間</button>
                 </div>
 
                 <div class="panel-label">
@@ -465,9 +467,9 @@
             </div>
 
             <div class="instructions">
-                🕹️ <b>電腦</b>: 左鍵正確 (同步) / 右鍵死路 (本地)<br>
-                📱 <b>手機</b>: 點擊正確 (同步) / <b>長按</b>死路 (本地)<br>
-                ⚠️ <b>規則</b>: 一層僅限一個 O。成員離開將清除其標記。<br>
+                🕹️ <b>電腦</b>: 左鍵正確 (同步) / 雙擊正確 (取消) / 右鍵死路 (本地)<br>
+                📱 <b>手機</b>: 點擊正確 (同步) / <b>雙擊</b>死路 (本地)<br>
+                ⚠️ <b>規則</b>: 每人在每層限標一格。其他人不能重複標記已佔用位置。<br>
                 📢 <b>注意</b>: P2P 在公用 Wi-Fi 或嚴格防火牆下可能無法相連。
             </div>
         </div>
@@ -481,8 +483,7 @@
         let fullMyId = "";
         let connections = {}; // { peerId: { conn, nick } }
         let mapData = Array(10).fill().map(() => Array(4).fill().map(() => ({ v: 0, owner: null })));
-        let lastLongPressTime = 0;
-
+        
         const els = {
             load: document.getElementById('loading'),
             loadMsg: document.getElementById('load-msg'),
@@ -498,6 +499,7 @@
             nickInput: document.getElementById('nick-input'),
             btnSaveNick: document.getElementById('btn-save-nick'),
             btnEditNick: document.getElementById('btn-edit-nick'),
+            btnLeave: document.getElementById('btn-leave'),
             initActions: document.getElementById('init-actions'),
             joinRow: document.getElementById('join-row')
         };
@@ -521,15 +523,21 @@
             els.loadMsg.innerText = msg;
         };
 
+        const getNickColor = (nick) => {
+            let hash = 0;
+            for (let i = 0; i < nick.length; i++) {
+                hash = nick.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const h = Math.abs(hash % 360);
+            return `hsl(${h}, 70%, 45%)`;
+        };
+
         // === 暱稱與控制項 ===
         function saveNick() {
             let val = els.nickInput.value.trim();
-            // 預設暱稱功能
             if (val === "") {
                 val = "冒險者" + Math.floor(1000 + Math.random() * 9000);
             }
-            
-            // 暱稱驗證：僅限中英數
             if (!/^[a-zA-Z0-9\u4e00-\u9fa5]{1,10}$/.test(val)) {
                 return alert("暱稱請使用 1-10 位英數或中文字，且不可含符號。");
             }
@@ -547,34 +555,33 @@
         }
 
         function editNick() {
-            if (!confirm("修改暱稱將中斷目前所有連線並重新連線，確定嗎？")) return;
-            
-            // 中斷 PeerJS
+            if (!confirm("修改暱稱將中斷目前連線，確定嗎？")) return;
+            leaveRoom();
+            els.nickInput.disabled = false;
+            els.nickInput.style.backgroundColor = "#fff";
+            els.btnSaveNick.style.display = "inline-flex";
+            els.btnEditNick.style.display = "none";
+        }
+
+        function leaveRoom() {
             if (peer) {
                 peer.destroy();
                 peer = null;
             }
-            
-            // 重置狀態但保留 Nick
             isHost = false;
             fullMyId = "";
             connections = {};
             clearLocal();
             
-            // 恢復 UI 到初始輸入狀態
-            els.nickInput.disabled = false;
-            els.nickInput.style.backgroundColor = "#fff";
-            els.btnSaveNick.style.display = "inline-flex";
-            els.btnEditNick.style.display = "none";
-            els.initActions.style.display = "none";
-            els.joinRow.style.display = "none";
+            els.initActions.style.display = "flex";
+            els.joinRow.style.display = "flex";
+            els.btnLeave.style.display = "none";
             els.btnHost.disabled = false;
             els.btnJoin.disabled = false;
             els.btnCopy.style.display = "none";
             els.btnReset.style.display = "none";
             els.pList.innerHTML = "";
-            
-            log("連線已重置，請修改暱稱後重新加入或建立房間。", "warn");
+            log("連線已斷開。", "warn");
         }
 
         // === PeerJS 核心邏輯 ===
@@ -615,8 +622,9 @@
                 isHost = true;
                 els.btnCopy.style.display = "inline-flex";
                 els.btnReset.style.display = "inline-flex";
-                els.btnHost.disabled = true;
-                els.btnJoin.disabled = true;
+                els.btnLeave.style.display = "inline-flex";
+                els.initActions.style.display = "none";
+                els.joinRow.style.display = "none";
                 window.location.hash = fullMyId;
                 log("已建立房間。您現在是房主。", "success");
                 refreshParticipantList();
@@ -629,14 +637,11 @@
             initPeer(() => {
                 setLoading(true, "正式接入中...");
                 const conn = peer.connect(targetId, { reliable: true });
-                
                 setupConnection(conn);
-
                 conn.on('open', () => {
                     log(`已連接房主 ${targetId.substring(0,4)}，申請加入...`, "info");
                     conn.send({ type: 'JOIN', nick: myNick });
                 });
-                
                 setTimeout(() => {
                     if (els.load.style.display === 'flex' && !Object.values(connections).length) {
                         setLoading(false);
@@ -663,7 +668,6 @@
                     }
                 }
             });
-            
             conn.on('error', (err) => {
                 log(`通道衝突: ${err}`, "error");
             });
@@ -679,14 +683,10 @@
                     setTimeout(() => conn.close(), 500);
                     return;
                 }
-                
                 connections[conn.peer] = { conn, nick: data.nick };
                 log(`歡迎成員: ${data.nick}`, "success");
-                
                 const fullList = getFullNickList();
                 broadcast({ type: 'NICK_LIST', users: fullList });
-                
-                // 深拷貝 mapData 以免引用問題
                 const currentState = JSON.parse(JSON.stringify(mapData));
                 conn.send({ type: 'WELCOME', state: currentState, users: fullList });
                 refreshParticipantList();
@@ -694,20 +694,13 @@
                 setLoading(false);
                 isHost = false;
                 connections[conn.peer] = { conn, nick: "房主" };
-                
-                // 完全同步地圖資料
                 mapData = JSON.parse(JSON.stringify(data.state));
-                for (let f = 0; f < 10; f++) {
-                    for (let d = 0; d < 4; d++) {
-                        updateDoorUI(f, d);
-                    }
-                }
-                
+                for (let f = 0; f < 10; f++) for (let d = 0; d < 4; d++) updateDoorUI(f, d);
                 log(`加入房間成功！同步地圖完成。`, "success");
-                els.btnHost.disabled = true;
-                els.btnJoin.disabled = true;
+                els.btnLeave.style.display = "inline-flex";
+                els.initActions.style.display = "none";
+                els.joinRow.style.display = "none";
                 els.joinInput.value = "";
-                
                 history.replaceState(null, document.title, window.location.pathname);
                 updateParticipantListFromWelcome(data.users);
             } else if (data.type === 'NICK_LIST') {
@@ -717,13 +710,13 @@
                 alert(data.reason);
                 conn.close();
             } else if (data.type === 'SYNC') {
-                // 更新物件屬性而非整個物件，保持引用穩定
                 mapData[data.f][data.d].v = data.v;
                 mapData[data.f][data.d].owner = data.owner;
-
+                // 注意：現在規則允許每層多個標記，但一個位置只能有一人。
+                // 如果是綠色標記，其他人同層其他格不應該自動清空，除非是同一個人。
                 if (data.v === 1) {
                     for (let d = 0; d < 4; d++) {
-                        if (d !== data.d) {
+                        if (d !== data.d && mapData[data.f][d].owner === data.owner) {
                             mapData[data.f][d].v = 0;
                             mapData[data.f][d].owner = null;
                             updateDoorUI(data.f, d);
@@ -764,7 +757,10 @@
             els.pList.innerHTML = "";
             tags.forEach(t => {
                 const tag = document.createElement("span");
+                const color = getNickColor(t.nick);
                 tag.className = `participant-tag ${t.isHost ? 'host' : ''}`;
+                tag.style.borderColor = color;
+                tag.style.color = color;
                 tag.innerText = (t.isHost ? "👑 " : "👤 ") + t.nick;
                 els.pList.appendChild(tag);
             });
@@ -797,7 +793,6 @@
                 label.className = "f-label";
                 label.innerText = `L${10 - f}`;
                 floor.appendChild(label);
-
                 const doors = document.createElement("div");
                 doors.className = "door-grid";
                 for (let d = 0; d < 4; d++) {
@@ -808,29 +803,29 @@
                     tag.className = "door-tag";
                     door.appendChild(tag);
 
-                    let pressTimer;
-                    const startPress = () => {
-                        pressTimer = setTimeout(() => {
+                    let lastTap = 0;
+                    door.addEventListener('touchend', (e) => {
+                        const now = Date.now();
+                        if (now - lastTap < 300) {
                             onDoorRightClick(f, d);
-                        }, 500);
-                    };
-                    const cancelPress = () => { clearTimeout(pressTimer); };
-
-                    door.onmousedown = (e) => { if (e.button === 0) startPress(); };
-                    door.onmouseup = cancelPress;
-                    door.ontouchstart = (e) => { startPress(); };
-                    door.ontouchend = cancelPress;
+                        }
+                        lastTap = now;
+                    });
 
                     door.onclick = (e) => {
-                        e.preventDefault();
-                        if (Date.now() - lastLongPressTime < 150) return;
+                        const now = Date.now();
+                        // 電腦端雙擊處理
+                        if (e.detail === 2) {
+                            if (window.matchMedia("(pointer: coarse)").matches) return;
+                            onDoorClick(f, d); // 這裡是為了取消
+                            return;
+                        }
                         onDoorClick(f, d);
                     };
                     door.oncontextmenu = (e) => {
                         e.preventDefault();
                         onDoorRightClick(f, d);
                     };
-                    
                     doors.appendChild(door);
                 }
                 floor.appendChild(doors);
@@ -843,19 +838,25 @@
             const item = mapData[f][d];
             
             if (item.v === 1) {
-                if (item.owner !== myNick && !isHost) {
-                    log("權限警告: 只有該標記者可撤銷 O。", "warn");
+                // 如果是自己的標記，可以取消
+                if (item.owner === myNick || isHost) {
+                    item.v = 0;
+                    item.owner = null;
+                } else {
+                    log("無法取消他人的標記。", "warn");
                     return;
                 }
-                item.v = 0;
-                item.owner = null;
             } else {
-                // 每層樓全場只能一格
+                // 如果該格已經有別人的標記，不准標記
+                if (item.owner && item.owner !== myNick) {
+                    log(`該格已被 ${item.owner} 標記。`, "warn");
+                    return;
+                }
+                // 每層樓一人限一格，先清空自己在這層的其他標記
                 for (let i = 0; i < 4; i++) {
-                    if (mapData[f][i].v === 1) {
+                    if (mapData[f][i].owner === myNick) {
                         const oldMsg = { type: 'SYNC', f, d: i, v: 0, owner: null };
                         syncMsg(oldMsg);
-                        // 本地立即反應
                         mapData[f][i].v = 0;
                         mapData[f][i].owner = null;
                         updateDoorUI(f, i);
@@ -864,7 +865,6 @@
                 item.v = 1;
                 item.owner = myNick;
             }
-
             updateDoorUI(f, d);
             syncMsg({ type: 'SYNC', f, d, v: item.v, owner: item.owner });
         }
@@ -878,12 +878,11 @@
         }
 
         function onDoorRightClick(f, d) {
-            lastLongPressTime = Date.now();
             const el = document.getElementById(`d-${f}-${d}`);
             if (el.classList.contains('state-error')) {
                 el.classList.remove('state-error');
             } else {
-                el.classList.remove('state-pass');
+                if (el.classList.contains('state-pass')) return;
                 el.classList.add('state-error');
             }
         }
@@ -895,11 +894,14 @@
             const item = mapData[f][d];
             
             if (item.v === 1) {
+                const color = getNickColor(item.owner);
                 el.classList.add('state-pass');
                 el.classList.remove('state-error');
+                el.style.setProperty('--marker-color', color);
                 tag.innerText = item.owner;
             } else {
                 el.classList.remove('state-pass');
+                el.style.removeProperty('--marker-color');
                 tag.innerText = "";
             }
         }
@@ -916,7 +918,10 @@
                 mapData[f][d].v = 0;
                 mapData[f][d].owner = null;
                 const el = document.getElementById(`d-${f}-${d}`);
-                if (el) el.classList.remove('state-pass', 'state-error');
+                if (el) {
+                    el.classList.remove('state-pass', 'state-error');
+                    el.style.removeProperty('--marker-color');
+                }
             }
         }
 
