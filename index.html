@@ -322,6 +322,17 @@
                 text-shadow: 1px 1px 0px rgba(0, 0, 0, 0.5);
             }
 
+            .ms-btn.danger {
+                background: linear-gradient(
+                    to bottom,
+                    #ef5350 0%,
+                    #c62828 100%
+                );
+                color: white;
+                border-color: #b71c1c;
+                text-shadow: 1px 1px 0px rgba(0, 0, 0, 0.5);
+            }
+
             .ms-btn:disabled {
                 opacity: 0.5;
                 cursor: not-allowed;
@@ -505,11 +516,6 @@
                 border-color: var(--marker-color, #4285f4);
                 border-width: 2px;
             }
-            .door.state-error {
-                background: #ffcdd2;
-                border-color: #ef5350;
-            }
-
             /* 死路小點容器 */
             .dead-end-dots {
                 position: absolute;
@@ -523,25 +529,15 @@
                 pointer-events: none;
             }
             .dead-dot {
-                width: 8px; /* 加大 */
-                height: 8px;
-                border-radius: 50%;
-                border: 1.5px solid #fff; /* 加粗邊框 */
-                box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
-            }
-            /* 我自己的死路標記強化顯示 */
-            .door.my-dead {
-                border: 2px solid #ff0000;
-                background: #ffebee;
-            }
-            .door.my-dead::after {
-                content: "✕";
-                position: absolute;
-                font-size: 20px;
-                color: #d32f2f;
+                font-size: 16px;
                 font-weight: bold;
-                opacity: 0.8;
-                pointer-events: none;
+                line-height: 1;
+                text-shadow:
+                    1px 1px 0 #fff,
+                    -1px -1px 0 #fff,
+                    1px -1px 0 #fff,
+                    -1px 1px 0 #fff,
+                    0 1px 2px rgba(0, 0, 0, 0.3);
             }
 
             .door:hover {
@@ -599,24 +595,6 @@
                 display: block;
             }
 
-            .door.state-error {
-                background: linear-gradient(
-                    to bottom,
-                    #f5c6cb 0%,
-                    #dc3545 100%
-                );
-                border-color: #bd2130;
-            }
-
-            .door.state-error::after {
-                content: "X";
-                color: white;
-                font-weight: bold;
-                font-size: 22px;
-                text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
-                z-index: 2;
-            }
-
             .footer-tools {
                 display: flex;
                 gap: 8px;
@@ -654,6 +632,9 @@
             .container.pip-active .log-section,
             .container.pip-active .instructions-btn-container,
             .container.pip-active #btn-reset-settings {
+                display: none !important;
+            }
+            .container.pip-active #btn-summary {
                 display: none !important;
             }
 
@@ -806,21 +787,10 @@
                                 邀請連結
                             </button>
                             <button
-                                class="ms-btn"
+                                class="ms-btn danger"
                                 id="btn-leave"
                                 onclick="leaveRoom()"
-                                style="
-                                    display: none;
-                                    flex: 1;
-                                    background: linear-gradient(
-                                        to bottom,
-                                        #ffcccc,
-                                        #ff9999
-                                    );
-                                    color: #cc0000;
-                                    border-color: #ff9999;
-                                    font-size: 11px;
-                                "
+                                style="display: none; flex: 1; font-size: 11px"
                                 title="離開房間"
                             >
                                 離開房間
@@ -893,13 +863,21 @@
                     <!-- 由 JS 渲染 -->
                 </div>
 
-                <div class="footer-tools">
+                <div class="footer-tools" style="flex-wrap: wrap; gap: 8px">
                     <button
-                        class="ms-btn"
+                        class="ms-btn danger"
                         id="btn-reset-all"
-                        style="flex: 1; border-color: #e57373; display: none"
+                        style="flex: 1; display: none"
                     >
                         清空所有標記
+                    </button>
+                    <button
+                        class="ms-btn primary"
+                        id="btn-summary"
+                        onclick="openSummary()"
+                        style="flex: 1; display: none"
+                    >
+                        路線總覽
                     </button>
                     <button
                         class="ms-btn"
@@ -1002,8 +980,11 @@
                         </li>
                         <li>
                             <b>共享死路 (✕)</b
-                            >：標記死路會同步給所有隊友。格子內的「彩色小點」代表是誰標記的，而「大紅
-                            ✕」則是您自己的標記。
+                            >：格子內的「彩色小點」代表是誰標記的死路。若該格同時標記了通路，為避免畫面雜亂，會優先顯示通路並暫時隱藏死路小點。
+                        </li>
+                        <li>
+                            <b>路線總覽</b
+                            >：開啟總覽視窗，系統會根據當下狀態自動推導每位成員的通關數字路線，點擊成員名稱即可一鍵複製。
                         </li>
                         <li>
                             <b>實時同步</b
@@ -1023,10 +1004,11 @@
                     <p><b>電腦版</b>：左鍵標記通路 (O)，右鍵標記死路 (✕)。</p>
                     <p>
                         <b>手機版</b>： <br />• <b>單點空格</b>：標記為通路
-                        (O)。 <br />• <b>單點已標記格</b>：立即取消該格的標記。
-                        <br />• <b>快速雙擊</b>：將格子標記為死路 (✕)。 <br />•
-                        <b>進階：通路轉死路</b>：點一下取消通路，接著快速雙擊
-                        (0.5s 內) 即可變更為死路。
+                        (O)。 <br />•
+                        <b>單點已標記通路</b>：立即取消該格的通路標記。 <br />•
+                        <b>快速雙擊</b>：將格子標記為死路 (✕)。 <br />•
+                        <b>取消死路</b
+                        >：對著自己的死路標記再次快速雙擊即可取消。
                     </p>
 
                     <h3
@@ -1069,6 +1051,62 @@
             </div>
         </div>
 
+        <!-- 路線總覽 Modal -->
+        <div
+            class="modal-overlay"
+            id="summary-modal"
+            onclick="closeModal('summary-modal')"
+        >
+            <div class="modal" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <span>📜 路線總覽</span>
+                    <span
+                        class="modal-close"
+                        onclick="closeModal('summary-modal')"
+                        >&times;</span
+                    >
+                </div>
+                <div class="modal-content">
+                    <div
+                        style="
+                            font-size: 11px;
+                            color: #333;
+                            margin-bottom: 8px;
+                            line-height: 1.5;
+                        "
+                    >
+                        <span style="color: #d32f2f; font-weight: bold"
+                            >⚠️
+                            總覽隨時會變動，記得手動更換標記後重新打開總覽。</span
+                        ><br />
+                        <b>ℹ️ 自動判定規則：</b>若該樓層有一人標記了 3
+                        個不同門的死路，剩下 1
+                        門即為該人通路；若該樓層有三個死路且未標記通路，剩下的便是第四人的通路；若已有三個通路，剩下的便是第四人通路。無從判斷則顯示為
+                        0。
+                    </div>
+                    <div
+                        id="summary-content"
+                        style="
+                            background: #f9f9f9;
+                            border: 1px solid #ccc;
+                            padding: 8px;
+                            border-radius: 4px;
+                            max-height: 200px;
+                            overflow-y: auto;
+                            margin-bottom: 8px;
+                        "
+                    ></div>
+                    <button
+                        class="ms-btn primary"
+                        onclick="generateSummary()"
+                        style="width: 100%; margin-top: 5px"
+                    >
+                        重新總覽
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <script>
             // === 狀態變數 ===
             let peer = null;
@@ -1081,6 +1119,7 @@
             // 核心架構：8 個槽位的全量狀態
             let gameState = {
                 slots: Array(8).fill(null), // 槽位對象: { index, nick, color, peerId, isHost, connected, passMarkers: [], deadEndMarkers: [] }
+                clearCount: 0,
             };
 
             let mySlotIndex = -1; // 自己在 gameState.slots 中的索引
@@ -1278,6 +1317,7 @@
                 getDoc().getElementById("btn-leave").style.display = "none";
                 getDoc().getElementById("btn-copy").style.display = "none";
                 getDoc().getElementById("btn-reset-all").style.display = "none";
+                getDoc().getElementById("btn-summary").style.display = "none";
                 getDoc().getElementById("participant-list").innerHTML = "";
                 getDoc().getElementById("member-title").innerText =
                     "👥 房間成員 (0/8)";
@@ -1363,6 +1403,8 @@
                         "inline-flex";
                     getDoc().getElementById("btn-reset-all").style.display =
                         "inline-flex";
+                    getDoc().getElementById("btn-summary").style.display =
+                        "inline-flex";
 
                     getDoc().getElementById("btn-host").disabled = true;
                     getDoc().getElementById("btn-join").disabled = true;
@@ -1400,6 +1442,8 @@
                         log(`已連接房主，申請加入...`, "info");
 
                         getDoc().getElementById("btn-leave").style.display =
+                            "inline-flex";
+                        getDoc().getElementById("btn-summary").style.display =
                             "inline-flex";
 
                         conn.send({
@@ -1590,12 +1634,7 @@
                             (m) => m.f !== f,
                         );
                         slot.passMarkers.push({ f, d });
-                        // 同時清除該格的自己的 DeadEnd
-                        slot.deadEndMarkers = slot.deadEndMarkers.filter(
-                            (m) => !(m.f === f && m.d === d),
-                        );
-                        // 房主強權：如果是房主標記，可能要考慮是否允許覆蓋他人？
-                        // 目前逻辑維持：每人各自標記自己的
+                        // 保留該格子的死路標記，以便誤點時取消通路能恢復
                     } else if (mType === "dead") {
                         slot.deadEndMarkers.push({ f, d });
                         slot.passMarkers = slot.passMarkers.filter(
@@ -1619,6 +1658,7 @@
                             s.deadEndMarkers = [];
                         }
                     });
+                    gameState.clearCount = (gameState.clearCount || 0) + 1;
                 } else if (cmd.type === "CMD_KICK") {
                     const target = gameState.slots[cmd.targetIndex];
                     if (target) {
@@ -1670,7 +1710,12 @@
                     tag.style.color = s.color;
 
                     const icon = s.isHost ? "👑 " : "👤 ";
-                    tag.innerHTML = icon + s.nick;
+                    const isMe = s.index === mySlotIndex ? " (我)" : "";
+                    tag.innerHTML = icon + s.nick + isMe;
+                    if (s.index === mySlotIndex) {
+                        tag.style.fontWeight = "900";
+                        tag.style.textDecoration = "underline";
+                    }
 
                     if (isHost && !s.isHost) {
                         const kBtn = getDoc().createElement("span");
@@ -1908,7 +1953,8 @@
                 deadSlots.forEach((s) => {
                     const dot = getDoc().createElement("div");
                     dot.className = "dead-dot";
-                    dot.style.backgroundColor = s.color;
+                    dot.style.color = s.color;
+                    dot.innerText = "✕";
                     dotsContainer.appendChild(dot);
                     if (s.index === mySlotIndex) el.classList.add("my-dead");
                 });
@@ -1920,8 +1966,13 @@
                         hexToRgb(hslToHex(passSlot.color)) || "66, 133, 244";
                     el.style.setProperty("--marker-color-rgb", rgb);
                     tag.innerText = passSlot.nick;
+
+                    dotsContainer.style.display = "none";
                 } else if (deadSlots.length > 0) {
                     el.classList.add("state-error");
+                    dotsContainer.style.display = "flex";
+                } else {
+                    dotsContainer.style.display = "flex";
                 }
             }
 
@@ -1980,20 +2031,12 @@
                         });
 
                     // 複製樣式
-                    Array.from(document.styleSheets).forEach((styleSheet) => {
-                        try {
-                            const cssRules = Array.from(styleSheet.cssRules)
-                                .map((rule) => rule.cssText)
-                                .join("");
-                            const style = document.createElement("style");
-                            style.textContent = cssRules;
-                            pipWindow.document.head.appendChild(style);
-                        } catch (e) {
-                            const link = document.createElement("link");
-                            link.rel = "stylesheet";
-                            link.href = styleSheet.href;
-                            pipWindow.document.head.appendChild(link);
-                        }
+                    Array.from(
+                        document.querySelectorAll(
+                            "style, link[rel='stylesheet']",
+                        ),
+                    ).forEach((el) => {
+                        pipWindow.document.head.appendChild(el.cloneNode(true));
                     });
 
                     // 移動內容
@@ -2012,6 +2055,168 @@
                     console.error(err);
                     alert("無法開啟懸浮視窗。");
                 }
+            }
+
+            function openSummary() {
+                openModal("summary-modal");
+                generateSummary();
+            }
+
+            function generateSummary() {
+                const summaryContent =
+                    getDoc().getElementById("summary-content");
+                if (!summaryContent) return;
+                summaryContent.innerHTML = "";
+
+                const activeSlots = gameState.slots.filter(
+                    (s) => s && s.connected,
+                );
+                if (activeSlots.length === 0) {
+                    summaryContent.innerText = "目前無成員在房間內。";
+                    return;
+                }
+
+                let floorStatus = [];
+                for (let f = 0; f < 10; f++) {
+                    let doorHasPass = [false, false, false, false];
+                    let slotHasPass = {};
+
+                    for (let d = 0; d < 4; d++) {
+                        let passSlot = activeSlots.find((s) =>
+                            s.passMarkers.some((m) => m.f === f && m.d === d),
+                        );
+                        if (passSlot) {
+                            doorHasPass[d] = true;
+                            slotHasPass[passSlot.index] = d + 1;
+                        }
+                    }
+
+                    // Rule Deduction per slot:
+                    activeSlots.forEach((s) => {
+                        let sIdx = s.index;
+                        if (!slotHasPass[sIdx]) {
+                            // Rule C: Did S mark exactly 3 different doors as dead on this floor?
+                            let sDeadDoors = [];
+                            let sLastUnmarked = -1;
+                            for (let d = 0; d < 4; d++) {
+                                if (
+                                    s.deadEndMarkers.some(
+                                        (m) => m.f === f && m.d === d,
+                                    )
+                                ) {
+                                    sDeadDoors.push(d);
+                                } else {
+                                    sLastUnmarked = d;
+                                }
+                            }
+                            if (
+                                sDeadDoors.length === 3 &&
+                                sLastUnmarked !== -1
+                            ) {
+                                slotHasPass[sIdx] = sLastUnmarked + 1;
+                                doorHasPass[sLastUnmarked] = true; // Implicitly taken
+                                return; // Done for this slot
+                            }
+
+                            // Rule A: If a door has exactly 3 dead markers from OTHER members, and no pass marker, it's S's pass!
+                            for (let d = 0; d < 4; d++) {
+                                if (!doorHasPass[d]) {
+                                    let deadSlotsOnD = activeSlots.filter(
+                                        (s2) =>
+                                            s2.deadEndMarkers.some(
+                                                (m) => m.f === f && m.d === d,
+                                            ),
+                                    );
+                                    if (deadSlotsOnD.length >= 3) {
+                                        let sHasDeadHere = deadSlotsOnD.some(
+                                            (s2) => s2.index === sIdx,
+                                        );
+                                        if (!sHasDeadHere) {
+                                            slotHasPass[sIdx] = d + 1;
+                                            doorHasPass[d] = true; // Mark it as taken implicitly
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+
+                    // Rule B pass: If 3 unique doors are taken, the remaining member gets the 4th door!
+                    let membersWithoutPass = [];
+                    let doorsWithPass = new Set();
+                    activeSlots.forEach((s) => {
+                        if (slotHasPass[s.index]) {
+                            doorsWithPass.add(slotHasPass[s.index] - 1);
+                        } else {
+                            membersWithoutPass.push(s);
+                        }
+                    });
+                    if (
+                        doorsWithPass.size === 3 &&
+                        membersWithoutPass.length === 1
+                    ) {
+                        for (let d = 0; d < 4; d++) {
+                            if (!doorsWithPass.has(d)) {
+                                slotHasPass[membersWithoutPass[0].index] =
+                                    d + 1;
+                                break;
+                            }
+                        }
+                    }
+
+                    floorStatus[f] = slotHasPass;
+                }
+
+                // Render per slot
+                activeSlots.forEach((s) => {
+                    let routeArr = [];
+                    for (let f = 9; f >= 0; f--) {
+                        let door = floorStatus[f][s.index] || 0;
+                        routeArr.push(door);
+                    }
+                    let routeStr = routeArr.join("-");
+
+                    let div = getDoc().createElement("div");
+                    div.style.marginBottom = "6px";
+                    div.style.display = "flex";
+                    div.style.justifyContent = "space-between";
+                    div.style.alignItems = "center";
+                    div.style.borderBottom = "1px dashed #eee";
+                    div.style.paddingBottom = "4px";
+
+                    let leftGroup = getDoc().createElement("div");
+
+                    let nameTag = getDoc().createElement("span");
+                    nameTag.style.color = s.color || "#000";
+                    nameTag.style.fontWeight = "bold";
+                    const isMe = s.index === mySlotIndex ? " (我)" : "";
+                    nameTag.innerText = s.nick + isMe;
+
+                    let res = getDoc().createElement("span");
+                    res.innerText = ` : ${routeStr}`;
+                    res.style.fontFamily = "monospace";
+                    res.style.color = "#333";
+                    res.style.fontWeight = "bold";
+
+                    leftGroup.appendChild(nameTag);
+                    leftGroup.appendChild(res);
+
+                    let copyBtn = getDoc().createElement("button");
+                    copyBtn.className = "ms-btn";
+                    copyBtn.style.fontSize = "10px";
+                    copyBtn.style.padding = "2px 8px";
+                    copyBtn.innerText = "複製";
+                    copyBtn.onclick = () => {
+                        navigator.clipboard.writeText(routeStr).then(() => {
+                            alert(`已複製 ${s.nick} 的路線: \n${routeStr}`);
+                        });
+                    };
+
+                    div.appendChild(leftGroup);
+                    div.appendChild(copyBtn);
+                    summaryContent.appendChild(div);
+                });
             }
 
             // === 啟動 ===
